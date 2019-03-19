@@ -34,8 +34,23 @@ struct markov_model *markov_generate(const char *corpus, int order)
     return model;
 }
 
+static void destroy_term(struct markov_term *term)
+{
+    for (int i = 0; i < term->nchildren; i++) {
+        destroy_term(&term->children[i]);
+    }
+    if (term->children)
+        free(term->children);
+    if (term->name)
+        free(term->name);
+}
+
 void markov_destroy(struct markov_model *model)
 {
+    destroy_term(&model->head);
+    markov_flush(model);
+    free(model->stream_symbols);
+    free(model->output_guesses);
     free(model);
 }
 
@@ -197,6 +212,12 @@ int markov_flush(struct markov_model *model)
 {
     model->nguesses = 0;
     model->stream_pos = 0;
-    // should be freeing stream_symbols
+    for (int i = 0; i < model->order; i++) {
+        if (model->stream_symbols[i]) {
+            free(model->stream_symbols[i]);
+            model->stream_symbols[i] = NULL;
+        }
+    }
+
     return 0;
 }
