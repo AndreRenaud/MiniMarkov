@@ -17,6 +17,9 @@ struct markov_model {
 
     char **stream_symbols;
     int stream_pos;
+
+    char **output_guesses;
+    int nguesses;
 };
 
 struct markov_model *markov_generate(const char *corpus, int order)
@@ -26,6 +29,8 @@ struct markov_model *markov_generate(const char *corpus, int order)
     model->order = order;
     model->stream_symbols = (char **)calloc(sizeof(char *), order);
     model->stream_pos = 0;
+    model->output_guesses = (char **)calloc(sizeof(char *), order);
+    model->nguesses = 0;
     return model;
 }
 
@@ -38,17 +43,17 @@ static struct markov_term *find_term(struct markov_term *node, const char *term,
 {
     struct markov_term *ret = NULL;
     // FIXME: Should be sorting children and using bsearch
-    printf("Looking for term '%s'\n", term);
+    //printf("Looking for term '%s'\n", term);
     for (int i = 0; i < node->nchildren; i++) {
         if (strcmp(node->children[i].name, term) == 0) {
             ret = &node->children[i];
-            printf("Found %s at pos %d\n", term, i);
+            //printf("Found %s at pos %d\n", term, i);
             break;
         }
     }
 
     if (add && !ret) {
-        printf("Adding term '%s' to node '%s'\n", term, node->name);
+        //printf("Adding term '%s' to node '%s'\n", term, node->name);
         node->nchildren++;
         node->children = (struct markov_term *)realloc(node->children, node->nchildren * sizeof(struct markov_term));
         // FIXME: Handle realloc failure & re-sort
@@ -97,10 +102,10 @@ int markov_stream_term(struct markov_model *model, const char *term)
 
     if (model->stream_pos < model->order)
         return 0;
-    printf("Adding stream:");
-    for (int i = 0; i < model->order; i++)
-        printf(" '%s'", model->stream_symbols[i]);
-    printf("\n");
+    //printf("Adding stream:");
+    //for (int i = 0; i < model->order; i++)
+        //printf(" '%s'", model->stream_symbols[i]);
+    //printf("\n");
     return markov_add_term(model, model->stream_symbols);
 }
 
@@ -132,9 +137,11 @@ static struct markov_term *guess_next(struct markov_term *term)
     for (int i = 0; i < term->nchildren; i++) {
         total += term->children[i].count;
     }
+    //if (total == 0)
+        //return NULL;
 
     guess = rand() % total;
-    printf("Guessing %d of %d\n", guess, total);
+    //printf("Guessing %d of %d\n", guess, total);
     for (int i = 0; i < term->nchildren; i++) {
         pos += term->children[i].count;
         if (guess < pos)
@@ -143,18 +150,53 @@ static struct markov_term *guess_next(struct markov_term *term)
     return NULL;
 }
 
-
-const char *markov_guess_next(struct markov_model *model, char * const *terms, int nterms)
+static struct markov_term *guess_next_term(struct markov_model *model, char * const *terms, int nterms)
 {
     struct markov_term *child = &model->head;
     for (int i = 0; i < nterms; i++) {
-        printf("Checking for %s\n", terms[i]);
+        //printf("Checking for [%d]: '%s'\n", i, terms[i]);
         child = find_term(child, terms[i], false);
         if (!child)
             return NULL;
-        printf("Walked down to %s\n", child->name);
+        //printf("Walked down to %s\n", child->name);
     }
 
     child = guess_next(child);
-    return child ? child->name : NULL;
+    return child;
+}
+
+const char *markov_guess_next(struct markov_model *model, char * const *terms, int nterms)
+{
+    struct markov_term *guess = guess_next_term(model, terms, nterms);
+    return guess ? guess->name : NULL;
+}
+
+const char *markov_guess(struct markov_model *model)
+{
+    struct markov_term *guess;
+    for (int i = model->nguesses; i >= 0; i--)  {
+        guess = guess_next_term(model, &model->output_guesses[model->nguesses - i], i);
+        if (guess)
+            break;
+    }
+
+    if (!guess)
+        return NULL;
+
+    if (model->nguesses >= model->order - 1) {
+        memmove(&model->output_guesses[0], &model->output_guesses[1], (model->nguesses - 1) * sizeof(char *));
+        model->nguesses--;
+    }
+    model->output_guesses[model->nguesses] = guess->name;
+    model->nguesses++;
+    
+    return guess->name;
+}
+
+int markov_flush(struct markov_model *model)
+{
+    model->nguesses = 0;
+    model->stream_pos = 0;
+    // should be freeing stream_symbols
+    return 0;
 }
