@@ -91,5 +91,8 @@ int main(int argc, char **argv)
     for (int i = 0; i < 1000; i++)
         printf("%s ", markov_guess(model));
     printf("\n");
+    markov_destroy(model);
+    model = NULL;
+
     return 0;
 }
