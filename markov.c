@@ -6,6 +6,7 @@
 
 struct markov_term {
     int count;
+    int child_total;
     struct markov_term *children;
     int nchildren;
     char *name;
@@ -76,6 +77,7 @@ static struct markov_term *find_term(struct markov_term *node, const char *term,
             return NULL;
         ret = &node->children[node->nchildren - 1];
         ret->count = 0;
+        ret->child_total = 0;
         ret->children = NULL;
         ret->nchildren = 0;
         ret->name = strdup(term);
@@ -91,11 +93,14 @@ int markov_add_term(struct markov_model *model, char *const*terms)
     if (!term)
         return -1;
     term->count++;
+    model->head.child_total++;
     for (int i = 1; i < model->order; i++) {
-        term = find_term(term, terms[i], true);
-        if (!term)
+        struct markov_term *next = find_term(term, terms[i], true);
+        if (!next)
             return -1;
-        term->count++;
+        next->count++;
+        term->child_total++;
+        term = next;
     }
     return 0;
 }
@@ -126,15 +131,10 @@ int markov_stream_term(struct markov_model *model, const char *term)
 
 static int markov_dump_term(struct markov_term *term, int order, int indent)
 {
-    int total = 0;
-    for (int i = 0; i < term->nchildren; i++) {
-        total += term->children[i].count;
-    }
-
     for (int i = 0; i < term->nchildren; i++) {
         printf("%*s%s [%d %d%%]\n", indent * 2, "", 
             term->children[i].name,
-            term->children[i].count, term->children[i].count * 100 / total);
+            term->children[i].count, term->children[i].count * 100 / term->child_total);
         if (order - 1 > 0)
             markov_dump_term(&term->children[i], order - 1, indent + 2);
     }
@@ -148,15 +148,10 @@ int markov_dump(struct markov_model *model)
 
 static struct markov_term *guess_next(struct markov_term *term)
 {
-    int total = 0, guess, pos = 0;
-    for (int i = 0; i < term->nchildren; i++) {
-        total += term->children[i].count;
-    }
-    //if (total == 0)
-        //return NULL;
+    int guess, pos = 0;
 
-    guess = rand() % total;
-    //printf("Guessing %d of %d\n", guess, total);
+    guess = rand() % term->child_total;
+    //printf("Guessing %d of %d\n", guess, term->child_total);
     for (int i = 0; i < term->nchildren; i++) {
         pos += term->children[i].count;
         if (guess < pos)
