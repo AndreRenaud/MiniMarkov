@@ -150,6 +150,9 @@ static struct markov_term *guess_next(struct markov_term *term)
 {
     int guess, pos = 0;
 
+    if (!term->child_total)
+        return NULL;
+
     guess = rand() % term->child_total;
     //printf("Guessing %d of %d\n", guess, term->child_total);
     for (int i = 0; i < term->nchildren; i++) {

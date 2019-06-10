@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <errno.h>
+
 #include "markov.h"
 
 static int to_skip(char ch)
@@ -54,6 +56,8 @@ static int next_word(FILE *input, char *buffer, int max_len)
 static int learn_file(struct markov_model *model, const char *file)
 {
     FILE *input = fopen(file, "rb");
+    if (!input)
+        return -errno;
     do {
         char word[256];
         if (next_word(input, word, sizeof(word)) < 0)
